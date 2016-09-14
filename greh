@@ -1,0 +1,195 @@
+#!/usr/bin/env perl
+
+use warnings;
+use strict;
+
+my %colours = (
+    'default'       => 33,
+    'red'           => 31,
+    'green'         => 32,
+    'yellow'        => 33,
+    'orange'        => 33,
+    'blue'          => 34,
+    'magenta'       => 35,
+    'pink'          => 35,
+    'cyan'          => 36,
+    'grey'          => 37,
+    'gray'          => 37,
+    'brightblack'   => 90,
+    'darkgrey'      => 90,
+    'darkgray'      => 90,
+    'brightred'     => 91,
+    'brightgreen'   => 92,
+    'brightyellow'  => 93,
+    'brightorange'  => 93,
+    'brightblue'    => 94,
+    'brightmagenta' => 95,
+    'brightpink'    => 95,
+    'brightcyan'    => 96,
+    'brightgrey'    => 97,
+    'brightgray'    => 97,
+    'white'         => 97,
+);
+
+sub usage
+{
+    print STDERR <<HEREDOG;
+Usage:
+    greh [options] pattern... [[options] pattern...]...
+
+Options:
+    -i: match subsequent patterns case-insensitively
+    -I: match subsequent patterns case-sensitively (default)
+    -n: only print matching lines
+    -N: print all lines (default)
+
+Colours:
+HEREDOG
+
+    foreach my $colour (grep { $_ ne 'default' } sort keys %colours) {
+        print STDERR "    --$colour:\n";
+    }
+
+    print STDERR <<GOODGIRL;
+        print matches for subsequent patterns in the specified colour
+
+    --colour ansi:
+    --color ansi:
+        print matches for subsequent patterns with specified ansi
+        colour formatting sequence (e.g. '34;43')
+
+    --default:
+        print matches for subsequent patterns in the default colour (yellow)
+
+    Actual displayed colours may vary from terminal to terminal.
+
+Patterns specified earlier take precedence over patterns specified later.
+For example, if invoked as `greh --red foo --green bar`, then the input
+line "foobar" will be printed in red, not green.
+
+If the option '--' is specified, subsequent arguments will be treated as
+input filenames, not options or patterns.  Otherwise, input is taken from
+standard input.
+GOODGIRL
+
+    exit 1;
+}
+
+sub compile_pattern
+{
+    my ($pattern, $options) = @_;
+
+    my $begin = '^(';
+
+    if ($options->{insensitive}) {
+        $begin .= '(?i)';
+    }
+
+    if (substr($pattern, 0, 1) eq '^') {
+        substr($pattern, 0, 1, q{});
+    }
+    else {
+        $begin .= '.*';
+    }
+
+    my $end = ')$';
+
+    if (substr($pattern, -1, 1) eq '$') {
+        substr($pattern, -1, 1, q{});
+    }
+    else {
+        $end = '.*' . $end;
+    }
+
+    return qr{${begin}${pattern}${end}};
+}
+
+sub parse_patterns
+{
+    my ($patterns, $g_options) = @_;
+
+    my %options;
+    my $colour = $colours{default};
+
+    while (scalar @ARGV) {
+        my $arg = shift @ARGV;
+
+        last if $arg eq '--';
+
+        if (substr($arg, 0, 2) eq '--') {
+            # long option
+            substr($arg, 0, 2, q{});
+            if ($arg eq 'color' || $arg eq 'colour') {
+                my $ansi = shift @ARGV;
+                if ($ansi =~ m/^[\d;]+$/) {
+                    $colour = $ansi;
+                }
+                else {
+                    print STDERR "invalid colour code: $ansi\n";
+                    return undef;
+                }
+            }
+            elsif (grep { $_ eq $arg } keys %colours) {
+                $colour = $colours{$arg};
+            }
+            elsif ($arg eq 'help') {
+                return undef;
+            }
+            else {
+                print STDERR "unrecognised option: --$arg\n";
+                return undef;
+            }
+        }
+        elsif (substr($arg, 0, 1) eq '-') {
+            # short option(s)
+            substr($arg, 0, 1, q{});
+            foreach my $opt (split q{}, $arg) {
+                if ($opt eq 'i') {
+                    $options{insensitive} = 1;
+                }
+                elsif ($opt eq 'I') {
+                    $options{insensitive} = 0;
+                }
+                elsif ($opt eq 'n') {
+                    $g_options->{noprint} = 1;
+                }
+                elsif ($opt eq 'N') {
+                    $g_options->{noprint} = 0;
+                }
+                elsif ($opt eq 'h') {
+                    return undef;
+                }
+            }
+        }
+        else {
+            # pattern
+            my $re = eval { compile_pattern($arg, \%options) };
+            if ($@) {
+                print STDERR "$@\n";
+                return undef;
+            }
+            push @{$patterns}, { pattern => $re, colour => $colour };
+        }
+    }
+
+    return scalar @{$patterns};
+}
+
+########################################################################
+
+my @patterns;
+my %g_options;
+usage if not parse_patterns(\@patterns, \%g_options);
+
+while (<>) {
+    chomp;
+    my $matched;
+    foreach my $p (@patterns) {
+        $matched = s{$p->{pattern}}{\033[$p->{colour}m$1\033[0m};
+        last if $matched;
+    }
+    next if $g_options{noprint} and not $matched;
+    print $_, "\n";
+}
+
+exit 0;
