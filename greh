@@ -79,29 +79,11 @@ sub compile_pattern
 {
     my ($pattern, $options) = @_;
 
-    my $begin = '^(';
-
     if ($options->{insensitive}) {
-        $begin .= '(?i)';
+        $pattern = '(?i)' . $pattern;
     }
 
-    if (substr($pattern, 0, 1) eq '^') {
-        substr($pattern, 0, 1, q{});
-    }
-    else {
-        $begin .= '.*';
-    }
-
-    my $end = ')$';
-
-    if (substr($pattern, -1, 1) eq '$') {
-        substr($pattern, -1, 1, q{});
-    }
-    else {
-        $end = '.*' . $end;
-    }
-
-    return qr{${begin}${pattern}${end}};
+    return qr{$pattern};
 }
 
 sub parse_patterns
@@ -175,6 +157,15 @@ sub parse_patterns
     return scalar @{$patterns};
 }
 
+sub colour_text
+{
+    my ($colour, $text) = @_;
+
+    return $text if not $colour;
+
+    return "\033[${colour}m${text}\033[0m";
+}
+
 ########################################################################
 
 my @patterns;
@@ -182,11 +173,14 @@ my %g_options;
 usage if not parse_patterns(\@patterns, \%g_options);
 
 while (<>) {
-    chomp;
     my $matched;
+    chomp;
     foreach my $p (@patterns) {
-        $matched = s{$p->{pattern}}{\033[$p->{colour}m$1\033[0m};
-        last if $matched;
+        if (m/$p->{pattern}/) {
+            $_ = colour_text($p->{colour}, $_);
+            $matched = 1;
+            last;
+        }
     }
     next if $g_options{noprint} and not $matched;
     print $_, "\n";
