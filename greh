@@ -111,7 +111,7 @@ sub parse_patterns
                     return undef;
                 }
             }
-            elsif (grep { $_ eq $arg } keys %colours) {
+            elsif (exists $colours{$arg}) {
                 $colour = $colours{$arg};
             }
             elsif ($arg eq 'help') {
