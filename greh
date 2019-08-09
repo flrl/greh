@@ -132,6 +132,9 @@ sub parse_patterns
                 elsif ($opt eq 'I') {
                     $options{insensitive} = 0;
                 }
+                elsif ($opt eq 'l') {
+                    $options{linebuffered} = 1;
+                }
                 elsif ($opt eq 'n') {
                     $g_options->{noprint} = 1;
                 }
@@ -171,6 +174,10 @@ sub colour_text
 my @patterns;
 my %g_options;
 usage if not parse_patterns(\@patterns, \%g_options);
+
+if ($g_options{linebuffered}) {
+    $| = 1;
+}
 
 while (<>) {
     my $matched;
